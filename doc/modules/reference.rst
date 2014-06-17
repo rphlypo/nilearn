@@ -7,7 +7,7 @@ the :ref:`full user guide <user_guide>` for further details, as the class and
 function raw specifications may not be enough to give full guidelines on their
 uses.
 
-.. contents:: List of modules
+.. contents:: **List of modules**
    :local:
 
 .. _datasets_ref:
@@ -21,8 +21,8 @@ uses.
 
 **User guide:** See the :ref:`datasets` section for further details.
 
-Functions
----------
+**Functions**:
+
 .. currentmodule:: nilearn.datasets
 
 .. autosummary::
@@ -39,6 +39,25 @@ Functions
    fetch_yeo_2011_atlas
    load_harvard_oxford
 
+.. _decoding_ref:
+
+:mod:`nilearn.decoding`: Decoding
+=================================
+
+.. automodule:: nilearn.decoding
+   :no-members:
+   :no-inherited-members:
+
+**Classes**:
+
+.. currentmodule:: nilearn.decoding
+
+.. autosummary::
+   :toctree: generated/
+   :template: class.rst
+   
+   SearchLight
+
 .. _decomposition_ref:
 
 :mod:`nilearn.decompositon`: Multivariate decompositions
@@ -48,8 +67,7 @@ Functions
    :no-members:
    :no-inherited-members:
 
-Classes
--------
+**Classes**:
 
 .. currentmodule:: nilearn.decomposition
 
@@ -68,8 +86,8 @@ Classes
    :no-members:
    :no-inherited-members:
 
-Functions
----------
+**Functions**:
+
 .. currentmodule:: nilearn.image
 
 .. autosummary::
@@ -79,6 +97,8 @@ Functions
    high_variance_confounds
    smooth_img
    resample_img
+   crop_img
+   mean_img
 
 
 .. _io_ref:
@@ -92,8 +112,8 @@ Functions
 
 **User guide:** See the :ref:`nifti_masker` section for further details.
 
-Classes
--------
+**Classes**:
+
 .. currentmodule:: nilearn.input_data
 
 .. autosummary::
@@ -116,33 +136,8 @@ Classes
 
 **User guide:** See the :ref:`masking` section for further details.
 
-Functions
----------
-.. currentmodule:: nilearn.masking
+**Functions**:
 
-.. autosummary::
-   :toctree: generated/
-   :template: function.rst
-
-   compute_epi_mask
-   compute_multi_epi_mask
-   intersect_masks
-   apply_mask
-   unmask
-
-.. _region_ref:
-
-:mod:`nilearn.region`: Regions Handling Utilities
-=================================================
-
-.. automodule:: nilearn.region
-   :no-members:
-   :no-inherited-members:
-
-**User guide:** See the :ref:`region` section for further details.
-
-Functions
----------
 .. currentmodule:: nilearn.region
 
 .. autosummary::
@@ -159,25 +154,25 @@ Functions
    :func:`nilearn.masking.apply_mask`,
    :func:`nilearn.masking.unmask`
 
-.. _decoding_ref:
 
-:mod:`nilearn.decoding`: Decoding
-=================================
+:mod:`nilearn.mass_univariate`: Mass-univariate analysis
+=========================================================
 
-.. automodule:: nilearn.decoding
+.. automodule:: nilearn.mass_univariate
    :no-members:
    :no-inherited-members:
 
-Classes
--------
-.. currentmodule:: nilearn.decoding
+.. No relevant user manual section yet.
+
+**Functions**:
+
+.. currentmodule:: nilearn.mass_univariate
 
 .. autosummary::
    :toctree: generated/
-   :template: class.rst
-   
-   SearchLight
+   :template: function.rst
 
+   permuted_ols
 
 .. _signal_ref:
 
@@ -190,8 +185,8 @@ Classes
 
 .. No relevant user manual section yet.
 
-Functions
----------
+**Functions**:
+
 .. currentmodule:: nilearn.signal
 
 .. autosummary::
@@ -199,25 +194,5 @@ Functions
    :template: function.rst
 
    clean
-   high_variance_confounds
-   butterworth
 
 
-.. _mass_univariate:
-
-:mod:`nilearn.mass_univariate`: Massively Univariate Analysis
-=============================================================
-
-.. automodule:: nilearn.mass_univariate
-   :no-members:
-   :no-inherited-members:
-
-Functions
----------
-.. currentmodule:: nilearn.mass_univariate
-
-.. autosummary::
-   :toctree: generated/
-   :template: function.rst
-
-   permuted_ols

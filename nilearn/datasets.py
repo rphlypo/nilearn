@@ -397,7 +397,7 @@ def movetree(src, dst):
 
 
 def _fetch_files(dataset_name, files, data_dir=None, resume=True, folder=None,
-                 verbose=0):
+                 mock=False, verbose=0):
     """Load requested dataset, downloading it if needed or requested.
 
     If needed, _fetch_files download data in a sandbox and check that all files
@@ -425,6 +425,10 @@ def _fetch_files(dataset_name, files, data_dir=None, resume=True, folder=None,
 
     folder: string, optional
         Folder in which the file must be fetched inside the dataset folder.
+
+    mock: boolean, optional
+        If true, create empty files if the file cannot be downloaded. Test use
+        only.
 
     Returns
     -------
@@ -474,13 +478,21 @@ def _fetch_files(dataset_name, files, data_dir=None, resume=True, folder=None,
                 dl_file = os.path.join(temp_dir, opts['move'])
             if 'uncompress' in opts:
                 try:
-                    _uncompress_file(dl_file)
+                    if not mock or os.path.getsize(dl_file) != 0:
+                        _uncompress_file(dl_file)
+                    else:
+                        os.remove(dl_file)
                 except:
                     abort = True
         if (not os.path.exists(target_file) and not
                 os.path.exists(temp_target_file)):
-            warnings.warn('An error occured while fetching %s' % file_)
-            abort = True
+            if not mock:
+                warnings.warn('An error occured while fetching %s' % file_)
+                abort = True
+            else:
+                if not os.path.exists(os.path.dirname(temp_target_file)):
+                    os.makedirs(os.path.dirname(temp_target_file))
+                open(temp_target_file, 'w').close()
         if abort:
             if os.path.exists(temp_dir):
                 shutil.rmtree(temp_dir)
@@ -928,7 +940,8 @@ def fetch_haxby(data_dir=None, n_subjects=1, fetch_stimuli=False,
         n_subjects = 6
 
     # Dataset files
-    url = 'http://data.pymvpa.org/datasets/haxby2001/'
+    if url is None:
+        url = 'http://data.pymvpa.org/datasets/haxby2001/'
     md5sums = _fetch_files("haxby2001", [('MD5SUMS', url + 'MD5SUMS', {})],
                            data_dir=data_dir)[0]
     md5sums = _read_md5_sum_file(md5sums)
@@ -1535,3 +1548,540 @@ def fetch_miyawaki2008(data_dir=None, url=None, resume=True, verbose=0):
         label=files[32:64],
         mask=files[64],
         mask_roi=files[65:])
+
+
+def fetch_localizer_contrasts(contrasts, n_subjects=None, get_tmaps=False,
+                              get_masks=False, get_anats=False,
+                              data_dir=None, url=None, resume=True, verbose=0):
+    """Download and load Brainomics Localizer dataset (94 subjects).
+
+    "The Functional Localizer is a simple and fast acquisition
+    procedure based on a 5-minute functional magnetic resonance
+    imaging (fMRI) sequence that can be run as easily and as
+    systematically as an anatomical scan. This protocol captures the
+    cerebral bases of auditory and visual perception, motor actions,
+    reading, language comprehension and mental calculation at an
+    individual level. Individual functional maps are reliable and
+    quite precise. The procedure is decribed in more detail on the
+    Functional Localizer page."
+    (see http://brainomics.cea.fr/localizer/)
+
+    "Scientific results obtained using this dataset are described in
+    Pinel et al., 2007" [1]
+
+    Parameters
+    ----------
+    contrasts: list of str
+        The contrasts to be fetched (for all 94 subjects available).
+        Allowed values are:
+            {"checkerboard",
+            "horizontal checkerboard",
+            "vertical checkerboard",
+            "horizontal vs vertical checkerboard",
+            "vertical vs horizontal checkerboard",
+            "sentence listening",
+            "sentence reading",
+            "sentence listening and reading",
+            "sentence reading vs checkerboard",
+            "calculation (auditory cue)",
+            "calculation (visual cue)",
+            "calculation (auditory and visual cue)",
+            "calculation (auditory cue) vs sentences listening",
+            "calculation (visual cue) vs sentence reading",
+            "calculation vs sentences listening/reading",
+            "calculation (auditory cue) and sentence listening",
+            "calculation (visual cue) and sentence reading",
+            "calculation and sentence listening/reading",
+            "calculation (auditory cue) and sentence listening vs "
+            "calculation (visual cue) and sentence reading",
+            "calculation (visual cue) and sentence reading vs checkerboard"
+            "calculation and sentence listening/reading vs button press",
+            "left button press (auditory cue)",
+            "left button press (visual cue)",
+            "left button press",
+            "left vs right button press",
+            "right button press (auditory cue)": "right auditory click",
+            "right button press (visual cue)": "right visual click",
+            "right button press",
+            "right vs left button press",
+            "button press (auditory cue) vs sentences listening",
+            "button press (visual cue) vs sentences reading",
+            "button press vs calculation and sentence listening/reading"}
+        or equivalently:
+            {"checkerboard",
+            "horizontal checkerboard",
+            "vertical checkerboard",
+            "horizontal vs vertical checkerboard",
+            "vertical vs horizontal checkerboard",
+            "auditory sentences",
+            "visual sentences",
+            "auditory&visual sentences",
+            "visual sentences vs checkerboard",
+            "auditory calculation",
+            "visual calculation",
+            "auditory&visual calculation",
+            "auditory calculation vs auditory sentences",
+            "visual calculation vs sentences",
+            "auditory&visual calculation vs sentences",
+            "auditory processing",
+            "visual processing",
+            "visual processing vs auditory processing",
+            "auditory processing vs visual processing",
+            "visual processing vs checkerboard",
+            "cognitive processing vs motor",
+            "left auditory click",
+            "left visual click",
+            "left auditory&visual click",
+            "left auditory & visual click vs right auditory&visual click",
+            "right auditory click",
+            "right visual click",
+            "right auditory&visual click",
+            "right auditory & visual click vs left auditory&visual click",
+            "auditory click vs auditory sentences",
+            "visual click vs visual sentences",
+            "auditory&visual motor vs cognitive processing"}
+
+    n_subjects: int, optional
+        The number of subjects to load. If None is given,
+        all 94 subjects are used.
+
+    get_tmaps: boolean
+        Whether t maps should be fetched or not.
+
+    get_masks: boolean
+        Whether individual masks should be fetched or not.
+
+    get_anats: boolean
+        Whether individual structural images should be fetched or not.
+
+    data_dir: string, optional
+        Path of the data directory. Used to force data storage in a specified
+        location.
+
+    url: string, optional
+        Override download URL. Used for test only (or if you setup a mirror of
+        the data).
+
+    resume: bool
+        Whether to resume download of a partly-downloaded file.
+
+    verbose: int
+        Verbosity level (0 means no message).
+
+    Returns
+    -------
+    data: Bunch
+        Dictionary-like object, the interest attributes are :
+        'cmaps': string list
+            Paths to nifti contrast maps
+        'tmaps' string list (if 'get_tmaps' set to True)
+            Paths to nifti t maps
+        'masks': string list
+            Paths to nifti files corresponding to the subjects individual masks
+        'anats': string
+            Path to nifti files corresponding to the subjects structural images
+
+    References
+    ----------
+    [1] Pinel, Philippe, et al.
+        "Fast reproducible identification and large-scale databasing of
+         individual functional cognitive networks."
+        BMC neuroscience 8.1 (2007): 91.
+
+    Caveats
+    -------
+    When n_subjects < 94 is specified, all subjects are actually downloaded.
+    However, the caching system only checks for the presence of the n_subjects
+    first subjects on disk.
+
+    """
+    if n_subjects is None:
+        n_subjects = 94  # 94 subjects available
+    if (n_subjects > 94) or (n_subjects < 1):
+        warnings.warn("Wrong value for \'n_subjects\' (%d). The maximum "
+                      "value will be used instead (\'n_subjects=94\')")
+        n_subjects = 94  # 94 subjects available
+
+    # we allow the user to use alternatives to Brainomics contrast names
+    contrast_name_wrapper = {
+        # Checkerboard
+        "checkerboard": "checkerboard",
+        "horizontal checkerboard": "horizontal checkerboard",
+        "vertical checkerboard": "vertical checkerboard",
+        "horizontal vs vertical checkerboard":
+            "horizontal vs vertical checkerboard",
+        "vertical vs horizontal checkerboard":
+            "vertical vs horizontal checkerboard",
+        # Sentences
+        "sentence listening": "auditory sentences",
+        "sentence reading": "visual sentences",
+        "sentence listening and reading": "auditory&visual sentences",
+        "sentence reading vs checkerboard": "visual sentences vs checkerboard",
+        # Calculation
+        "calculation (auditory cue)": "auditory calculation",
+        "calculation (visual cue)": "visual calculation",
+        "calculation (auditory and visual cue)": "auditory&visual calculation",
+        "calculation (auditory cue) vs sentences listening":
+            "auditory calculation vs auditory sentences",
+        "calculation (visual cue) vs sentence reading":
+            "visual calculation vs sentences",
+        "calculation vs sentences": "auditory&visual calculation vs sentences",
+        # Calculation + Sentences
+        "calculation (auditory cue) and sentence listening":
+            "auditory processing",
+        "calculation (visual cue) and sentence reading": "visual processing",
+        "calculation and sentence listening/reading":
+            "visual processing vs auditory processing",
+        "calculation (auditory cue) and sentence listening vs "
+        "calculation (visual cue) and sentence reading":
+            "auditory processing vs visual processing",
+        "calculation (visual cue) and sentence reading vs checkerboard":
+            "visual processing vs checkerboard",
+        "calculation and sentence listening/reading vs button press":
+            "cognitive processing vs motor",
+        # Button press
+        "left button press (auditory cue)": "left auditory click",
+        "left button press (visual cue)": "left visual click",
+        "left button press": "left auditory&visual click",
+        "left vs right button press": "left auditory & visual click vs "
+           + "right auditory&visual click",
+        "right button press (auditory cue)": "right auditory click",
+        "right button press (visual cue)": "right visual click",
+        "right button press": "right auditory&visual click",
+        "right vs left button press": "right auditory & visual click "
+           + "vs left auditory&visual click",
+        "button press (auditory cue) vs sentences listening":
+            "auditory click vs auditory sentences",
+        "button press (visual cue) vs sentences reading":
+            "visual click vs visual sentences",
+        "button press vs calculation and sentence listening/reading":
+            "auditory&visual motor vs cognitive processing"}
+    allowed_contrasts = contrast_name_wrapper.values()
+    # convert contrast names
+    contrasts_wrapped = []
+    # get a unique ID for each contrast. It is used to give a unique name to
+    # each download file and avoid name collisions.
+    contrasts_indices = []
+    for contrast in contrasts:
+        if contrast in allowed_contrasts:
+            contrasts_wrapped.append(contrast)
+            contrasts_indices.append(allowed_contrasts.index(contrast))
+        elif contrast in contrast_name_wrapper:
+            name = contrast_name_wrapper[contrast]
+            contrasts_wrapped.append(name)
+            contrasts_indices.append(allowed_contrasts.index(name))
+        else:
+            raise ValueError("Contrast \'%s\' is not available" % contrast)
+
+    # It is better to perform several small requests than a big one because:
+    # - Brainomics server has no cache (can lead to timeout while the archive
+    #   is generated on the remote server)
+    # - Local (cached) version of the files can be checked for each contrast
+    opts = {'uncompress': True}
+    data_types = ["c map"]
+    if get_tmaps:
+        data_types.append(["t map"])
+    rql_types = str.join(", ", ["\"" + x + "\"" for x in data_types])
+    root_url = "http://brainomics.cea.fr/localizer/"
+    urls = [root_url + "brainomics_data_%d.zip?rql=" % i
+            + urllib.quote("Any X,XT,XL,XI,XF,XD WHERE X is Scan, X type XT, "
+                           "X label XL, X identifier XI, "
+                           "X format XF, X description XD, "
+                           "X type IN(%s), X label \"%s\"" % (rql_types, c),
+                           safe=',()')
+            + "&vid=data-zip"
+            for c, i in zip(contrasts_wrapped, contrasts_indices)]
+    filenames = []
+    for s in np.arange(1, n_subjects + 1):
+        for data_type in data_types:
+            for contrast_id, contrast in enumerate(contrasts_wrapped):
+                name_aux = str.replace(
+                    str.join('_', [data_type, contrast]), ' ', '_')
+                file_path = os.path.join(
+                    "brainomics_data", "S%02d" % s, name_aux + ".nii.gz")
+                file_tarball_url = urls[contrast_id]
+                filenames.append((file_path, file_tarball_url, opts))
+    # Fetch masks if asked by user
+    if get_masks:
+        urls.append(root_url + "/brainomics_data_masks.zip?rql="
+                    + urllib.quote("Any X,XT,XL,XI,XF,XD WHERE X is Scan, "
+                                   "X type XT, X label XL, X identifier XI, "
+                                   "X format XF, X description XD, "
+                                   "X type IN(\"boolean mask\"), "
+                                   "X label \"mask\"", safe=',()')
+                    + "&vid=data-zip")
+        for s in np.arange(1, n_subjects + 1):  # 94 subjects available
+            file_path = os.path.join(
+                "brainomics_data", "S%02d" % s, "boolean_mask.nii.gz")
+            file_tarball_url = urls[-1]
+            filenames.append((file_path, file_tarball_url, opts))
+    # Fetch anats if asked by user
+    if get_anats:
+        urls.append(root_url + "brainomics_data_anats.zip?rql="
+                    + urllib.quote("Any X,XT,XL,XI,XF,XD WHERE X is Scan, "
+                                   "X type XT, X label XL, X identifier XI, "
+                                   "X format XF, X description XD, "
+                                   "X type IN(\"normalized T1\"), "
+                                   "X label \"anatomy\"", safe=',()')
+                    + "&vid=data-zip")
+        for s in np.arange(1, n_subjects + 1):
+            file_path = os.path.join(
+                "brainomics_data", "S%02d" % s,
+                "normalized_T1_anat_defaced.nii.gz")
+            file_tarball_url = urls[-1]
+            filenames.append((file_path, file_tarball_url, opts))
+
+    # Actual data fetching
+    files = _fetch_files('brainomics_localizer', filenames, data_dir=data_dir)
+    anats = None
+    masks = None
+    tmaps = None
+    if get_anats:
+        anats = files[-n_subjects:]
+        files = files[:-n_subjects]
+    if get_masks:
+        masks = files[-n_subjects:]
+        files = files[:-n_subjects]
+    if get_tmaps:
+        tmaps = files(slice(1, len(files) + 1, 2))
+        files = files(slice(0, len(files), 2))
+    return Bunch(cmaps=files, tmaps=tmaps, masks=masks, anats=anats)
+
+
+def fetch_localizer_calculation_task(n_subjects=None, data_dir=None):
+    """Fetch calculation task contrast maps from the localizer.
+
+    This function is only a caller for the fetch_localizer_contrasts in order
+    to simplify examples reading and understanding.
+
+    Parameters
+    ----------
+    n_subjects: int, optional
+        The number of subjects to load. If None is given,
+        all 94 subjects are used.
+
+    data_dir: string, optional
+        Path of the data directory. Used to force data storage in a specified
+        location.
+
+    Returns
+    -------
+    data: Bunch
+        Dictionary-like object, the interest attributes are :
+        'cmaps': string list
+            Paths to nifti contrast maps
+
+    """
+    return fetch_localizer_contrasts(["calculation (auditory and visual cue)"],
+                                     n_subjects=n_subjects,
+                                     get_tmaps=False, get_masks=False,
+                                     get_anats=False, data_dir=data_dir,
+                                     url=None, resume=True, verbose=0)
+
+
+def fetch_oasis_vbm(n_subjects=None, dartel_version=True,
+                    data_dir=None, url=None, resume=True, verbose=0):
+    """Download and load Oasis "cross-sectional MRI" dataset (416 subjects).
+
+    Parameters
+    ----------
+    n_subjects: int, optional
+        The number of subjects to load. If None is given, all the
+        subjects are used.
+
+    dartel_version: boolean,
+        Whether or not to use data normalized with DARTEL instead of standard
+        SPM8 normalization.
+
+    data_dir: string, optional
+        Path of the data directory. Used to force data storage in a specified
+        location. Default: None
+
+    url: string, optional
+        Override download URL. Used for test only (or if you setup a mirror of
+        the data).
+
+    resume: bool, optional
+        If true, try resuming download if possible
+
+    verbose: int, optional
+        Defines the level of verbosity of the output
+
+    Returns
+    -------
+    data: Bunch
+        Dictionary-like object, the interest attributes are :
+        'gray_matter_maps': string list
+            Paths to nifti gray matter density probability maps
+        'white_matter_maps' string list
+            Paths to nifti gray matter density probability maps
+        'ext_vars': np.recarray
+            Data from the .csv file with information about selected subjects
+        'data_usage_agreement': string
+            Path to the .txt file containing the data usage agreement.
+
+    References
+    ----------
+    [1] http://www.oasis-brains.org/
+
+    [2] Open Access Series of Imaging Studies (OASIS): Cross-sectional MRI
+        Data in Young, Middle Aged, Nondemented, and Demented Older Adults.
+        Marcus, D. S and al., 2007, Journal of Cognitive Neuroscience.
+
+    Notes
+    -----
+    In the DARTEL version, original Oasis data [1] have been preprocessed
+    with the following steps:
+      1. Dimension swapping (technically required for subsequent steps)
+      2. Brain Extraction
+      3. Segmentation with SPM8
+      4. Normalization using DARTEL algorithm
+      5. Modulation
+      6. Replacement of NaN values with 0 in gray/white matter density maps.
+      7. Resampling to reduce shape and make it correspond to the shape of
+         the non-DARTEL data (fetched with dartel_version=False).
+      8. Replacement of values < 1e-4 with zeros to reduce the file size.
+
+    In the non-DARTEL version, the following steps have been performed instead:
+      1. Dimension swapping (technically required for subsequent steps)
+      2. Brain Extraction
+      3. Segmentation and normalization to a template with SPM8
+      4. Modulation
+      5. Replacement of NaN values with 0 in gray/white matter density maps.
+
+    An archive containing the gray and white matter density probability maps
+    for the 416 available subjects is provided. Gross outliers are removed and
+    filtered by this data fetcher (DARTEL: 13 outliers; non-DARTEL: 1 outlier)
+    Externals variates (age, gender, estimated intracranial volume,
+    years of education, socioeconomic status, dementia score) are provided
+    in a CSV file that is a copy of the original Oasis CSV file. The current
+    downloader loads the CSV file and keeps only the lines corresponding to
+    the subjects that are actually demanded.
+
+    The Open Access Structural Imaging Series (OASIS) is a project
+    dedicated to making brain imaging data openly available to the public.
+    Using data available through the OASIS project requires agreeing with
+    the Data Usage Agreement that can be found at
+    http://www.oasis-brains.org/app/template/UsageAgreement.vm
+
+    """
+    # check number of subjects
+    if n_subjects is None:
+        n_subjects = 403 if dartel_version else 415
+    if dartel_version:  # DARTEL version has 13 identified outliers
+        if n_subjects > 403:
+            warnings.warn('Only 403 subjects are available in the '
+                          'DARTEL-normalized version of the dataset. '
+                          'All of them will be used instead of the wanted %d'
+                          % n_subjects)
+            n_subjects = 403
+    else:  # all subjects except one are available with non-DARTEL version
+        if n_subjects > 415:
+            warnings.warn('Only 415 subjects are available in the '
+                          'non-DARTEL-normalized version of the dataset. '
+                          'All of them will be used instead of the wanted %d'
+                          % n_subjects)
+            n_subjects = 415
+    if n_subjects < 1:
+        raise ValueError("Incorrect number of subjects (%d)" % n_subjects)
+
+    # pick the archive corrsponding to preprocessings type
+    if url is None:
+        if dartel_version:
+            url_images = ('https://www.nitrc.org/frs/download.php/'
+                          '6364/archive_dartel.tgz?i_agree=1&download_now=1')
+        else:
+            url_images = ('https://www.nitrc.org/frs/download.php/'
+                          '6359/archive.tgz?i_agree=1&download_now=1')
+        # covariates and license are in separate files on NITRC
+        url_csv = ('https://www.nitrc.org/frs/download.php/'
+                   '6348/oasis_cross-sectional.csv?i_agree=1&download_now=1')
+        url_dua = ('https://www.nitrc.org/frs/download.php/'
+                   '6349/data_usage_agreement.txt?i_agree=1&download_now=1')
+    else:  # local URL used in tests
+        # we copy the real csv file from tests/data dir to the temp dir
+        url_csv = url + "/oasis_cross-sectional.csv"
+        url_dua = url + "/data_usage_agreement.txt"
+        if dartel_version:
+            url_images = url + "/archive_dartel.tgz"
+        else:
+            url_images = url + "/archive.tgz"
+
+    opts = {'uncompress': True}
+
+    # missing subjects create shifts in subjects ids
+    missing_subjects = [8, 24, 36, 48, 89, 93, 100, 118, 128, 149, 154,
+                        171, 172, 175, 187, 194, 196, 215, 219, 225, 242,
+                        245, 248, 251, 252, 257, 276, 297, 306, 320, 324,
+                        334, 347, 360, 364, 391, 393, 412, 414, 427, 436]
+
+    if dartel_version:
+        # DARTEL produces outliers that are hidden by Nilearn's API
+        removed_outliers = [27, 57, 66, 83, 122, 157, 222, 269, 282, 287,
+                            309, 428]
+        missing_subjects = sorted(missing_subjects + removed_outliers)
+        file_names_gm = [
+            (os.path.join(
+                    "OAS1_%04d_MR1",
+                    "mwrc1OAS1_%04d_MR1_mpr_anon_fslswapdim_bet.nii.gz")
+             % (s, s),
+             url_images, opts)
+            for s in range(1, 457) if s not in missing_subjects][:n_subjects]
+        file_names_wm = [
+            (os.path.join(
+                    "OAS1_%04d_MR1",
+                    "mwrc2OAS1_%04d_MR1_mpr_anon_fslswapdim_bet.nii.gz")
+             % (s, s),
+             url_images, opts)
+            for s in range(1, 457) if s not in missing_subjects]
+    else:
+        # only one gross outlier produced, hidden by Nilearn's API
+        removed_outliers = [390]
+        missing_subjects = sorted(missing_subjects + removed_outliers)
+        file_names_gm = [
+            (os.path.join(
+                    "OAS1_%04d_MR1",
+                    "mwc1OAS1_%04d_MR1_mpr_anon_fslswapdim_bet.nii.gz")
+             % (s, s),
+             url_images, opts)
+            for s in range(1, 457) if s not in missing_subjects][:n_subjects]
+        file_names_wm = [
+            (os.path.join(
+                    "OAS1_%04d_MR1",
+                    "mwc2OAS1_%04d_MR1_mpr_anon_fslswapdim_bet.nii.gz")
+             % (s, s),
+             url_images, opts)
+            for s in range(1, 457) if s not in missing_subjects]
+    file_names_extvars = [("oasis_cross-sectional.csv", url_csv, {})]
+    file_names_dua = [("data_usage_agreement.txt", url_dua, {})]
+    # restrict to user-specified number of subjects
+    file_names_gm = file_names_gm[:n_subjects]
+    file_names_wm = file_names_wm[:n_subjects]
+
+    file_names = (file_names_gm + file_names_wm
+                  + file_names_extvars + file_names_dua)
+    files = _fetch_files('oasis1', file_names, resume=resume,
+                         data_dir=data_dir, verbose=verbose)
+
+    # Build Bunch
+    gm_maps = files[:n_subjects]
+    wm_maps = files[n_subjects:(2 * n_subjects)]
+    ext_vars_file = files[-2]
+    data_usage_agreement = files[-1]
+
+    # Keep CSV information only for selected subjects
+    csv_data = np.recfromcsv(ext_vars_file)
+    actual_subjects_ids = ["OAS1"
+                           + str.split(os.path.basename(x), "OAS1")[1][:9]
+                           for x in gm_maps]
+    subject_mask = np.zeros(csv_data.size, dtype=bool)
+    for i, subject_id in enumerate(csv_data['id']):
+        if subject_id in actual_subjects_ids:
+            subject_mask[i] = True
+    csv_data = csv_data[subject_mask]
+
+    return Bunch(
+        gray_matter_maps=gm_maps,
+        white_matter_maps=wm_maps,
+        ext_vars=csv_data,
+        data_usage_agreement=data_usage_agreement)
