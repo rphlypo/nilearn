@@ -12,3 +12,4 @@ from . import test_group_sparse_covariance
 from . import test_niimg_conversions
 from . import test_logger
 from . import test_signal
+from . import test_sampling
