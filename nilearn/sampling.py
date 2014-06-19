@@ -48,11 +48,16 @@ class StratifiedLeaveOneLabelOut():
         self.labels = labels
         self.n_iter = n_iter
         self.n_draws = n_draws
+        self.n_train = n_train
+        self.n_test = n_test
+        self.random_state = random_state
 
-        rg = check_random_state(random_state)
+    def __iter__(self):
 
-        y = np.asarray(y)
-        labels = np.asarray(labels)
+        rg = check_random_state(self.random_state)
+
+        y = np.asarray(self.y)
+        labels = np.asarray(self.labels)
         # construct target distribution
         n_samples = y.shape[0]
         unique_y, y_inversed = np.unique(y, return_inverse=True)
@@ -63,7 +68,7 @@ class StratifiedLeaveOneLabelOut():
 
         for train_ix, test_ix in lolo:
             try:
-                if n_draws == 1:
+                if self.n_iter == 1:
                     train_ix_ = train_ix[_sample_exact(y[train_ix],
                                                        py, unique_y,
                                                        random_state=rg)]
@@ -75,31 +80,43 @@ class StratifiedLeaveOneLabelOut():
 
             except ValueError as ve:
                 print ve.message
-        # In the KFold it is merely a question of folding each y
-        # this is true since the fold is an independent and balanced
-        # confounding variable
-        # this is no longer so for a pre-specified label (may be unbalanced, or
-        # worse, dependent)
-        # Should we run a dependence test of y on the labels?
-
-        # get a sampling scheme:
-        # for each leave-one-label-out split
-        #     1. perform n_iter random samples/re-orderings
-        #     2.
+        # TODO: include a sampler splitting over the labels as a
+        # leave-K-labels-out, balancing over y, i.e., choose those labels
+        # over which to split such that the distributions in train and test
+        # maximally match (if multiple of them are returned, do not return
+        # twice the same split)
+        # This problem is combinatorical, hence an efficient sample strategy
+        # should be found (testing all combinations only when permitted)
 
 
-def _sample_exact(z, target, target_vars, random_state=None):
-    """ sampling based on random pruning of samples
+def _sample_exact(z, p_target, target_vars, random_state=None):
+    """ get indices of z such that the indexed set is distributed as p_target
+
+    Given the target probability mass function (estimate) p_target, accumulate
+    a maximum number of samples of z such that these samples follow p_target
+    as close as possible (in the likelihood sense).
 
     input
     -----
-    z   : ndarray
+    z   : numpy.ndarray
         pool of samples
 
-    target: ndarray
-        sample histogram
+    p_target: numpy.ndarray
+        target probability mass function or histogram
+
+    target_vars: list or numpy.ndarray
+        the categorical variables on which p_target is defined, such that
+        P(target_vars[i]) = p_target[i]
+
+    random_state: integer, RandomState instance, or None
+        serves to seed the random generator
+
+    returns
+    -------
+    numpy.ndarray: index array to retrieve samples of z such that
+        P(z[i]) approx. P(target_vars[i])
     """
-    target = target / np.sum(target).astype(np.float)
+    p_target = p_target / np.sum(p_target).astype(np.float)
     rg = check_random_state(random_state)
     unique_z, z_inversed = np.unique(z, return_inverse=True)
     set_diff = set(target_vars) - set(unique_z)
@@ -109,8 +126,8 @@ def _sample_exact(z, target, target_vars, random_state=None):
                          'labels from the population. ' +
                          'Missing labels: {}'.format(list(set_diff)))
     z_counts = np.bincount(z_inversed)
-    target_counts = np.min(np.floor((z_counts - 1 / 2.) / target))
-    target_counts = np.ceil(target * target_counts).astype(np.int)
+    target_counts = np.min(np.floor((z_counts - 1 / 2.) / p_target))
+    target_counts = np.ceil(p_target * target_counts).astype(np.int)
     ix_list = list()
     for ix, z_ in enumerate(unique_z):
         ix_z_ = np.where(z == z_)[0]
